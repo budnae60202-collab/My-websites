@@ -1,0 +1,1144 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>운명의 랜덤 룰렛</title>
+    <style>
+        /* 시스템 기본 한국어 고딕 폰트 적용 및 초기화 */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", sans-serif;
+            background: radial-gradient(circle at top, #1e293b 0%, #0f172a 100%);
+            color: #f8fafc;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px;
+            overflow-x: hidden;
+        }
+
+        /* 컨페티(꽃가루) 전체화면 캔버스 */
+        #confettiCanvas {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 50;
+        }
+
+        /* 상단 헤더 */
+        header {
+            width: 100%;
+            max-width: 560px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-top: 4px;
+            padding-bottom: 12px;
+            z-index: 10;
+        }
+
+        .title-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .title-icon {
+            font-size: 28px;
+        }
+
+        .title-text h1 {
+            font-size: 22px;
+            font-weight: 900;
+            background: linear-gradient(90deg, #fde68a, #facc15, #f59e0b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.5px;
+        }
+
+        .title-text p {
+            font-size: 12px;
+            color: #94a3b8;
+            margin-top: 2px;
+        }
+
+        /* 음소거 버튼 */
+        #muteBtn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 14px;
+            border-radius: 999px;
+            background-color: rgba(30, 41, 59, 0.9);
+            border: 1px solid #334155;
+            color: #e2e8f0;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.1s;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        #muteBtn:hover {
+            background-color: #334155;
+        }
+
+        #muteBtn:active {
+            transform: scale(0.95);
+        }
+
+        /* 메인 룰렛 영역 */
+        main {
+            flex: 1;
+            width: 100%;
+            max-width: 480px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            margin: 6px 0;
+            z-index: 10;
+        }
+
+        /* 룰렛 원판 래퍼 */
+        .wheel-container {
+            position: relative;
+            width: min(82vw, 350px);
+            height: min(82vw, 350px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 14px 0;
+        }
+
+        /* 12시 방향 고정 포인터 */
+        #pointer {
+            position: absolute;
+            top: -22px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 30;
+            transform-origin: top center;
+            filter: drop-shadow(0 6px 8px rgba(0, 0, 0, 0.6));
+        }
+
+        @keyframes pointerTick {
+            0% { transform: translateX(-50%) rotate(0deg); }
+            40% { transform: translateX(-50%) rotate(-24deg); }
+            100% { transform: translateX(-50%) rotate(0deg); }
+        }
+
+        .pointer-ticking {
+            animation: pointerTick 0.12s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+
+        /* 룰렛 외곽 링 */
+        .wheel-outer-ring {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            overflow: hidden;
+            position: relative;
+            background-color: #1e293b;
+            box-shadow:
+                0 0 0 8px #334155,
+                0 0 0 12px #fbbf24,
+                0 20px 45px rgba(0, 0, 0, 0.65),
+                inset 0 0 20px rgba(0, 0, 0, 0.5);
+        }
+
+        #wheelCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* 중앙 '돌리기!' 버튼 */
+        #centerSpinBtn {
+            position: absolute;
+            z-index: 20;
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: linear-gradient(180deg, #ffffff 0%, #e2e8f0 100%);
+            color: #0f172a;
+            font-size: 16px;
+            font-weight: 900;
+            border: 4px solid #fbbf24;
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5), inset 0 -3px 6px rgba(0, 0, 0, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: transform 0.15s ease, opacity 0.2s;
+        }
+
+        #centerSpinBtn:hover:not(:disabled) {
+            transform: scale(1.06);
+        }
+
+        #centerSpinBtn:active:not(:disabled) {
+            transform: scale(0.95);
+        }
+
+        #centerSpinBtn:disabled {
+            opacity: 0.85;
+            cursor: not-allowed;
+        }
+
+        /* 하단 메인 돌리기 버튼 */
+        #mainSpinBtn {
+            margin-top: 12px;
+            width: 100%;
+            max-width: 280px;
+            padding: 15px 24px;
+            border: none;
+            border-radius: 16px;
+            background: linear-gradient(90deg, #FF6B6B, #FECA57, #1DD1A1);
+            color: #0f172a;
+            font-size: 19px;
+            font-weight: 900;
+            letter-spacing: 0.5px;
+            box-shadow: 0 10px 25px -5px rgba(254, 202, 87, 0.45);
+            cursor: pointer;
+            transition: transform 0.15s ease, filter 0.2s, opacity 0.2s;
+        }
+
+        #mainSpinBtn:hover:not(:disabled) {
+            filter: brightness(1.07);
+        }
+
+        #mainSpinBtn:active:not(:disabled) {
+            transform: scale(0.96);
+        }
+
+        #mainSpinBtn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        /* 항목별 이동 URL 안내 카드 */
+        .url-guide-panel {
+            width: 100%;
+            max-width: 460px;
+            background-color: rgba(30, 41, 59, 0.72);
+            border: 1px solid rgba(71, 85, 105, 0.7);
+            border-radius: 16px;
+            padding: 12px 14px;
+            margin-top: 14px;
+            z-index: 10;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .url-guide-title {
+            font-size: 12px;
+            font-weight: 800;
+            color: #cbd5e1;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .url-guide-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .url-guide-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            font-size: 11px;
+            background-color: rgba(15, 23, 42, 0.55);
+            padding: 6px 10px;
+            border-radius: 10px;
+            border: 1px solid rgba(51, 65, 85, 0.6);
+        }
+
+        .guide-label {
+            font-weight: 800;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .dot-coral { width: 9px; height: 9px; border-radius: 50%; background-color: #FF6B6B; display: inline-block; }
+        .dot-mint { width: 9px; height: 9px; border-radius: 50%; background-color: #1DD1A1; display: inline-block; }
+        .dot-amber { width: 9px; height: 9px; border-radius: 50%; background-color: #FECA57; display: inline-block; }
+
+        .guide-link {
+            color: #94a3b8;
+            text-decoration: none;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-family: monospace;
+            font-size: 11px;
+        }
+
+        .guide-link:hover {
+            color: #fde68a;
+            text-decoration: underline;
+        }
+
+        /* 최근 당첨 기록 패널 */
+        .history-panel {
+            width: 100%;
+            max-width: 460px;
+            background-color: rgba(30, 41, 59, 0.75);
+            border: 1px solid rgba(71, 85, 105, 0.7);
+            border-radius: 16px;
+            padding: 12px 14px;
+            margin-top: 10px;
+            z-index: 10;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35);
+        }
+
+        .history-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .history-header h2 {
+            font-size: 12px;
+            font-weight: 800;
+            color: #cbd5e1;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        #clearHistoryBtn {
+            background: none;
+            border: none;
+            color: #94a3b8;
+            font-size: 11px;
+            cursor: pointer;
+            display: none;
+        }
+
+        #clearHistoryBtn:hover {
+            color: #fb7185;
+        }
+
+        #historyList {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            max-height: 76px;
+            overflow-y: auto;
+        }
+
+        #emptyHistoryMsg {
+            font-size: 12px;
+            color: #64748b;
+            width: 100%;
+            text-align: center;
+            padding: 4px 0;
+        }
+
+        .history-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 800;
+            border: 1px solid transparent;
+        }
+
+        .badge-coral {
+            background-color: rgba(255, 107, 107, 0.2);
+            color: #ffb3b3;
+            border-color: rgba(255, 107, 107, 0.45);
+        }
+
+        .badge-mint {
+            background-color: rgba(29, 209, 161, 0.2);
+            color: #88f7d9;
+            border-color: rgba(29, 209, 161, 0.45);
+        }
+
+        .badge-amber {
+            background-color: rgba(254, 202, 87, 0.2);
+            color: #ffe69c;
+            border-color: rgba(254, 202, 87, 0.45);
+        }
+
+        .history-time {
+            opacity: 0.65;
+            font-weight: 400;
+            font-size: 10px;
+        }
+
+        /* 당첨 결과 모달 */
+        #resultModal {
+            position: fixed;
+            inset: 0;
+            z-index: 40;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            background-color: rgba(2, 6, 23, 0.78);
+            backdrop-filter: blur(4px);
+        }
+
+        #resultModal.show {
+            display: flex;
+        }
+
+        @keyframes popIn {
+            0% { opacity: 0; transform: scale(0.75) translateY(16px); }
+            70% { opacity: 1; transform: scale(1.04) translateY(-3px); }
+            100% { opacity: 1; transform: scale(1) translateY(0); }
+        }
+
+        .modal-card {
+            animation: popIn 0.38s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            width: 100%;
+            max-width: 360px;
+            background-color: #1e293b;
+            border: 2px solid rgba(251, 191, 36, 0.85);
+            border-radius: 24px;
+            padding: 26px 22px;
+            text-align: center;
+            box-shadow: 0 25px 60px rgba(0, 0, 0, 0.85);
+        }
+
+        .modal-emoji {
+            font-size: 44px;
+            margin-bottom: 6px;
+        }
+
+        .modal-subtitle {
+            font-size: 12px;
+            font-weight: 800;
+            color: #fbbf24;
+            letter-spacing: 2px;
+        }
+
+        #winnerDisplay {
+            font-size: 26px;
+            font-weight: 900;
+            color: #ffffff;
+            margin: 12px 0;
+            padding: 13px 12px;
+            border-radius: 16px;
+            background-color: rgba(15, 23, 42, 0.85);
+            border: 1px solid #334155;
+        }
+
+        .modal-desc {
+            font-size: 13px;
+            color: #94a3b8;
+            margin-bottom: 12px;
+        }
+
+        .redirect-box {
+            background-color: rgba(15, 23, 42, 0.65);
+            border: 1px dashed #475569;
+            border-radius: 14px;
+            padding: 12px;
+            margin-bottom: 16px;
+        }
+
+        #countdownText {
+            font-size: 13px;
+            font-weight: 700;
+            color: #fde68a;
+            margin-bottom: 6px;
+        }
+
+        #targetUrlDisplay {
+            font-size: 11px;
+            font-family: monospace;
+            color: #cbd5e1;
+            background-color: rgba(30, 41, 59, 0.8);
+            padding: 6px 8px;
+            border-radius: 8px;
+            word-break: break-all;
+            margin-bottom: 10px;
+        }
+
+        #goNowLink {
+            display: inline-block;
+            width: 100%;
+            padding: 11px 14px;
+            border-radius: 10px;
+            background: linear-gradient(90deg, #10b981, #059669);
+            color: #ffffff;
+            font-size: 14px;
+            font-weight: 800;
+            text-decoration: none;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
+            transition: transform 0.1s, filter 0.15s;
+        }
+
+        #goNowLink:hover {
+            filter: brightness(1.08);
+        }
+
+        #goNowLink:active {
+            transform: scale(0.97);
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        #spinAgainBtn {
+            flex: 1;
+            padding: 12px 14px;
+            border: none;
+            border-radius: 12px;
+            background: linear-gradient(90deg, #f59e0b, #ea580c);
+            color: #ffffff;
+            font-size: 14px;
+            font-weight: 800;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+
+        #spinAgainBtn:active {
+            transform: scale(0.96);
+        }
+
+        #closeModalBtn {
+            padding: 12px 14px;
+            border: none;
+            border-radius: 12px;
+            background-color: #334155;
+            color: #e2e8f0;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: background-color 0.15s;
+        }
+
+        #closeModalBtn:hover {
+            background-color: #475569;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 축하 꽃가루 캔버스 -->
+    <canvas id="confettiCanvas"></canvas>
+
+    <!-- 상단 헤더 -->
+    <header>
+        <div class="title-group">
+            <span class="title-icon">🎯</span>
+            <div class="title-text">
+                <h1>운명의 랜덤 룰렛</h1>
+                <p>조수은 · 송아지버섯 · 갱단미타입</p>
+            </div>
+        </div>
+
+        <button id="muteBtn" aria-label="소리 켜기/끄기">
+            <span id="muteIcon">🔊</span>
+            <span id="muteText">효과음 켜짐</span>
+        </button>
+    </header>
+
+    <!-- 메인 룰렛 섹션 -->
+    <main>
+        <div class="wheel-container" id="wheelContainer">
+            <!-- 12시 고정 포인터 -->
+            <div id="pointer">
+                <svg width="42" height="52" viewBox="0 0 44 54" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M22 52L4 16C4 7.16344 12.0589 2 22 2C31.9411 2 40 7.16344 40 16L22 52Z" fill="#EF4444" stroke="#FFFFFF" stroke-width="3"/>
+                    <circle cx="22" cy="15" r="5" fill="#FFFFFF"/>
+                </svg>
+            </div>
+
+            <!-- 룰렛 원판 -->
+            <div class="wheel-outer-ring">
+                <canvas id="wheelCanvas" width="400" height="400"></canvas>
+            </div>
+
+            <!-- 중앙 돌리기 버튼 -->
+            <button id="centerSpinBtn">돌리기!</button>
+        </div>
+
+        <button id="mainSpinBtn">🎲 룰렛 돌리기!</button>
+
+        <!-- 항목별 연결 URL 안내 -->
+        <section class="url-guide-panel" aria-label="항목별 연결 주소 안내">
+            <div class="url-guide-title">🔗 항목별 당첨 시 이동 주소</div>
+            <div class="url-guide-list">
+                <div class="url-guide-item">
+                    <span class="guide-label"><span class="dot-coral"></span>조수은</span>
+                    <a class="guide-link" href="https://songaji-mushroom.my.canva.site/are-you-hg80" target="_blank" rel="noopener noreferrer">https://songaji-mushroom.my.canva.site/are-you-hg80</a>
+                </div>
+                <div class="url-guide-item">
+                    <span class="guide-label"><span class="dot-mint"></span>송아지버섯</span>
+                    <a class="guide-link" href="https://songaji-mushroom.my.canva.site/" target="_blank" rel="noopener noreferrer">https://songaji-mushroom.my.canva.site/</a>
+                </div>
+                <div class="url-guide-item">
+                    <span class="guide-label"><span class="dot-amber"></span>갱단미타입</span>
+                    <a class="guide-link" href="https://songaji-mushroom.my.canva.site/gangdanme" target="_blank" rel="noopener noreferrer">https://songaji-mushroom.my.canva.site/gangdanme</a>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- 하단 최근 당첨 기록 -->
+    <section class="history-panel">
+        <div class="history-header">
+            <h2>📜 최근 당첨 기록</h2>
+            <button id="clearHistoryBtn">기록 지우기</button>
+        </div>
+        <div id="historyList">
+            <p id="emptyHistoryMsg">아직 기록이 없습니다. 룰렛을 돌려보세요!</p>
+        </div>
+    </section>
+
+    <!-- 당첨 모달 -->
+    <div id="resultModal">
+        <div class="modal-card">
+            <div class="modal-emoji">🎉</div>
+            <div class="modal-subtitle">오늘의 선택</div>
+            <div id="winnerDisplay">🎉 당첨: 조수은!</div>
+            <p class="modal-desc">축하합니다! 연결된 페이지로 이동합니다.</p>
+            <div class="redirect-box">
+                <div id="countdownText">⏳ 2초 후 자동으로 페이지가 열립니다...</div>
+                <div id="targetUrlDisplay">https://songaji-mushroom.my.canva.site/are-you-hg80</div>
+                <a id="goNowLink" href="https://songaji-mushroom.my.canva.site/are-you-hg80" target="_blank" rel="noopener noreferrer">🚀 지금 바로 이동하기</a>
+            </div>
+            <div class="modal-actions">
+                <button id="spinAgainBtn">🔄 다시 돌리기</button>
+                <button id="closeModalBtn">닫기 (이동 취소)</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            // 1. 3등분 항목 및 이동할 URL 데이터 설정
+            const SEGMENTS = [
+                {
+                    label: '조수은',
+                    url: 'https://songaji-mushroom.my.canva.site/are-you-hg80',
+                    color: '#FF6B6B',      // 코랄 핑크
+                    darkColor: '#EE5253',
+                    textColor: '#FFFFFF',
+                    badgeClass: 'badge-coral'
+                },
+                {
+                    label: '송아지버섯',
+                    url: 'https://songaji-mushroom.my.canva.site/',
+                    color: '#1DD1A1',      // 민트 에메랄드
+                    darkColor: '#10AC84',
+                    textColor: '#0F172A',
+                    badgeClass: 'badge-mint'
+                },
+                {
+                    label: '갱단미타입',
+                    url: 'https://songaji-mushroom.my.canva.site/gangdanme',
+                    color: '#FECA57',      // 앰버 골드
+                    darkColor: '#FF9F43',
+                    textColor: '#0F172A',
+                    badgeClass: 'badge-amber'
+                }
+            ];
+
+            const NUM_SEGMENTS = SEGMENTS.length;
+            const ARC_ANGLE = (Math.PI * 2) / NUM_SEGMENTS;
+
+            // DOM 요소 참조
+            const wheelContainer = document.getElementById('wheelContainer');
+            const wheelCanvas = document.getElementById('wheelCanvas');
+            const ctx = wheelCanvas.getContext('2d');
+            const confettiCanvas = document.getElementById('confettiCanvas');
+            const confettiCtx = confettiCanvas.getContext('2d');
+
+            const centerSpinBtn = document.getElementById('centerSpinBtn');
+            const mainSpinBtn = document.getElementById('mainSpinBtn');
+            const pointerEl = document.getElementById('pointer');
+
+            const muteBtn = document.getElementById('muteBtn');
+            const muteIcon = document.getElementById('muteIcon');
+            const muteText = document.getElementById('muteText');
+
+            const resultModal = document.getElementById('resultModal');
+            const winnerDisplay = document.getElementById('winnerDisplay');
+            const countdownText = document.getElementById('countdownText');
+            const targetUrlDisplay = document.getElementById('targetUrlDisplay');
+            const goNowLink = document.getElementById('goNowLink');
+            const spinAgainBtn = document.getElementById('spinAgainBtn');
+            const closeModalBtn = document.getElementById('closeModalBtn');
+
+            const historyList = document.getElementById('historyList');
+            const emptyHistoryMsg = document.getElementById('emptyHistoryMsg');
+            const clearHistoryBtn = document.getElementById('clearHistoryBtn');
+
+            // 상태 변수
+            let currentRotation = 0;
+            let isSpinning = false;
+            let isMuted = false;
+            let lastTickIndex = -1;
+            let historyRecords = [];
+            let redirectTimer = null;
+            let countdownInterval = null;
+
+            // 2. Web Audio API 효과음 생성 (외부 파일 미사용)
+            let audioCtx = null;
+
+            function initAudio() {
+                if (!audioCtx) {
+                    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                    if (AudioContextClass) {
+                        audioCtx = new AudioContextClass();
+                    }
+                }
+                if (audioCtx && audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+            }
+
+            function playTickSound() {
+                if (isMuted) return;
+                initAudio();
+                if (!audioCtx) return;
+
+                try {
+                    const now = audioCtx.currentTime;
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(750, now);
+                    osc.frequency.exponentialRampToValueAtTime(190, now + 0.045);
+
+                    gain.gain.setValueAtTime(0.26, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.045);
+
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+
+                    osc.start(now);
+                    osc.stop(now + 0.05);
+                } catch (e) {}
+            }
+
+            function playWinSound() {
+                if (isMuted) return;
+                initAudio();
+                if (!audioCtx) return;
+
+                try {
+                    const now = audioCtx.currentTime;
+                    const notes = [523.25, 659.25, 783.99, 1046.50];
+
+                    notes.forEach((freq, idx) => {
+                        const startTime = now + idx * 0.09;
+                        const duration = idx === notes.length - 1 ? 0.65 : 0.25;
+
+                        const osc = audioCtx.createOscillator();
+                        const gain = audioCtx.createGain();
+
+                        osc.type = 'sine';
+                        osc.frequency.setValueAtTime(freq, startTime);
+
+                        gain.gain.setValueAtTime(0.001, startTime);
+                        gain.gain.linearRampToValueAtTime(0.24, startTime + 0.02);
+                        gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+
+                        osc.connect(gain);
+                        gain.connect(audioCtx.destination);
+
+                        osc.start(startTime);
+                        osc.stop(startTime + duration + 0.02);
+                    });
+                } catch (e) {}
+            }
+
+            // 3. 캔버스 크기 조정 및 고해상도 룰렛 그리기
+            function resizeCanvases() {
+                const dpr = window.devicePixelRatio || 1;
+                const rect = wheelContainer.getBoundingClientRect();
+                const size = rect.width > 0 ? rect.width : 340;
+
+                wheelCanvas.width = size * dpr;
+                wheelCanvas.height = size * dpr;
+                ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+                confettiCanvas.width = window.innerWidth;
+                confettiCanvas.height = window.innerHeight;
+
+                drawWheel(size);
+            }
+
+            function drawWheel(explicitSize) {
+                const rect = wheelContainer.getBoundingClientRect();
+                const size = explicitSize || (rect.width > 0 ? rect.width : 340);
+                const center = size / 2;
+                const radius = center - 2;
+
+                ctx.clearRect(0, 0, size, size);
+
+                const startOffset = -Math.PI / 2;
+
+                SEGMENTS.forEach((seg, i) => {
+                    const startAngle = startOffset + currentRotation + i * ARC_ANGLE;
+                    const endAngle = startAngle + ARC_ANGLE;
+
+                    // 부채꼴 조각 채우기
+                    ctx.beginPath();
+                    ctx.moveTo(center, center);
+                    ctx.arc(center, center, radius, startAngle, endAngle);
+                    ctx.closePath();
+
+                    const grad = ctx.createRadialGradient(center, center, radius * 0.15, center, center, radius);
+                    grad.addColorStop(0, seg.color);
+                    grad.addColorStop(1, seg.darkColor);
+                    ctx.fillStyle = grad;
+                    ctx.fill();
+
+                    // 조각 경계선
+                    ctx.lineWidth = 3;
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+                    ctx.stroke();
+
+                    // 외곽 장식용 핀
+                    const pinRadius = radius * 0.91;
+                    const pinX = center + Math.cos(startAngle) * pinRadius;
+                    const pinY = center + Math.sin(startAngle) * pinRadius;
+                    ctx.beginPath();
+                    ctx.arc(pinX, pinY, 4.5, 0, Math.PI * 2);
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.fill();
+                    ctx.lineWidth = 1.5;
+                    ctx.strokeStyle = '#334155';
+                    ctx.stroke();
+
+                    // 한국어 텍스트 그리기
+                    ctx.save();
+                    const midAngle = startAngle + ARC_ANGLE / 2;
+                    ctx.translate(center, center);
+                    ctx.rotate(midAngle);
+
+                    ctx.fillStyle = seg.textColor;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+
+                    const fontSize = Math.max(18, Math.floor(size * 0.068));
+                    ctx.font = `900 ${fontSize}px -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif`;
+
+                    if (seg.textColor === '#FFFFFF') {
+                        ctx.shadowColor = 'rgba(0, 0, 0, 0.35)';
+                        ctx.shadowBlur = 4;
+                        ctx.shadowOffsetY = 1;
+                    }
+
+                    const textDist = radius * 0.58;
+                    ctx.fillText(seg.label, textDist, 0);
+                    ctx.restore();
+                });
+            }
+
+            // 4. 12시 포인터 기준 당첨 조각 인덱스 계산
+            function getSegmentIndexAtPointer(rotation) {
+                const twoPi = Math.PI * 2;
+                const normalized = ((twoPi - (rotation % twoPi)) % twoPi + twoPi) % twoPi;
+                return Math.floor(normalized / ARC_ANGLE) % NUM_SEGMENTS;
+            }
+
+            // 5. 룰렛 회전 애니메이션 (부드러운 감속)
+            function spinWheel() {
+                if (isSpinning) return;
+
+                initAudio();
+                hideModal();
+                isSpinning = true;
+                setButtonsDisabled(true);
+
+                const extraSpins = 6 + Math.floor(Math.random() * 5);
+                const randomOffset = Math.random() * Math.PI * 2;
+                const totalTargetDelta = extraSpins * Math.PI * 2 + randomOffset;
+
+                const startRotation = currentRotation;
+                const targetRotation = startRotation + totalTargetDelta;
+                const duration = 3800 + Math.random() * 500;
+                const startTime = performance.now();
+
+                lastTickIndex = getSegmentIndexAtPointer(currentRotation);
+
+                function easeOutQuint(t) {
+                    return 1 - Math.pow(1 - t, 5);
+                }
+
+                function animateFrame(now) {
+                    const elapsed = now - startTime;
+                    const progress = Math.min(elapsed / duration, 1);
+                    const easedProgress = easeOutQuint(progress);
+
+                    currentRotation = startRotation + totalTargetDelta * easedProgress;
+                    drawWheel();
+
+                    const currentIndex = getSegmentIndexAtPointer(currentRotation);
+                    if (currentIndex !== lastTickIndex) {
+                        lastTickIndex = currentIndex;
+                        playTickSound();
+                        triggerPointerAnimation();
+                    }
+
+                    if (progress < 1) {
+                        requestAnimationFrame(animateFrame);
+                    } else {
+                        currentRotation = targetRotation % (Math.PI * 2);
+                        drawWheel();
+                        isSpinning = false;
+                        setButtonsDisabled(false);
+
+                        const winnerIndex = getSegmentIndexAtPointer(currentRotation);
+                        const winner = SEGMENTS[winnerIndex];
+                        handleWin(winner);
+                    }
+                }
+
+                requestAnimationFrame(animateFrame);
+            }
+
+            function triggerPointerAnimation() {
+                pointerEl.classList.remove('pointer-ticking');
+                void pointerEl.offsetWidth;
+                pointerEl.classList.add('pointer-ticking');
+            }
+
+            function setButtonsDisabled(disabled) {
+                centerSpinBtn.disabled = disabled;
+                mainSpinBtn.disabled = disabled;
+                mainSpinBtn.textContent = disabled ? '🌀 룰렛이 돌아가는 중...' : '🎲 룰렛 돌리기!';
+            }
+
+            // 6. 당첨 결과 모달, 자동 URL 실행 및 히스토리 기록
+            function clearRedirectTimers() {
+                if (redirectTimer) {
+                    clearTimeout(redirectTimer);
+                    redirectTimer = null;
+                }
+                if (countdownInterval) {
+                    clearInterval(countdownInterval);
+                    countdownInterval = null;
+                }
+            }
+
+            function navigateToWinnerUrl(url) {
+                const newWin = window.open(url, '_blank', 'noopener,noreferrer');
+                if (!newWin || newWin.closed || typeof newWin.closed === 'undefined') {
+                    try {
+                        window.top.location.href = url;
+                    } catch (e) {
+                        window.location.href = url;
+                    }
+                }
+            }
+
+            function handleWin(winner) {
+                playWinSound();
+                launchConfetti();
+                addHistory(winner);
+                clearRedirectTimers();
+
+                winnerDisplay.textContent = `🎉 당첨: ${winner.label}!`;
+                targetUrlDisplay.textContent = winner.url;
+                goNowLink.href = winner.url;
+
+                let remainingSec = 2;
+                countdownText.textContent = `⏳ ${remainingSec}초 후 자동으로 페이지가 열립니다...`;
+                resultModal.classList.add('show');
+
+                countdownInterval = setInterval(() => {
+                    remainingSec -= 1;
+                    if (remainingSec > 0) {
+                        countdownText.textContent = `⏳ ${remainingSec}초 후 자동으로 페이지가 열립니다...`;
+                    } else {
+                        countdownText.textContent = '🌐 페이지를 여는 중입니다...';
+                        clearInterval(countdownInterval);
+                        countdownInterval = null;
+                    }
+                }, 1000);
+
+                redirectTimer = setTimeout(() => {
+                    countdownText.textContent = '✅ 페이지 이동을 실행했습니다. (열리지 않으면 아래 버튼 클릭)';
+                    navigateToWinnerUrl(winner.url);
+                }, 2000);
+            }
+
+            function hideModal() {
+                clearRedirectTimers();
+                resultModal.classList.remove('show');
+            }
+
+            function addHistory(winner) {
+                const now = new Date();
+                const hours = String(now.getHours()).padStart(2, '0');
+                const minutes = String(now.getMinutes()).padStart(2, '0');
+                const seconds = String(now.getSeconds()).padStart(2, '0');
+                const timeStr = `${hours}:${minutes}:${seconds}`;
+
+                historyRecords.unshift({
+                    label: winner.label,
+                    badgeClass: winner.badgeClass,
+                    time: timeStr
+                });
+
+                if (historyRecords.length > 15) {
+                    historyRecords.pop();
+                }
+
+                renderHistory();
+            }
+
+            function renderHistory() {
+                if (historyRecords.length === 0) {
+                    historyList.innerHTML = '';
+                    historyList.appendChild(emptyHistoryMsg);
+                    clearHistoryBtn.style.display = 'none';
+                    return;
+                }
+
+                clearHistoryBtn.style.display = 'inline-block';
+                historyList.innerHTML = historyRecords.map((item, idx) => `
+                    <span class="history-badge ${item.badgeClass}">
+                        ${idx === 0 ? '👑 ' : ''}${item.label}
+                        <span class="history-time">${item.time}</span>
+                    </span>
+                `).join('');
+            }
+
+            // 7. 축하 꽃가루 애니메이션
+            let confettiParticles = [];
+            let confettiAnimId = null;
+
+            function launchConfetti() {
+                const colors = ['#FF6B6B', '#1DD1A1', '#FECA57', '#54A0FF', '#FF9FF3', '#FFFFFF'];
+                confettiParticles = [];
+
+                for (let i = 0; i < 100; i++) {
+                    confettiParticles.push({
+                        x: confettiCanvas.width / 2 + (Math.random() - 0.5) * 140,
+                        y: confettiCanvas.height * 0.45,
+                        vx: (Math.random() - 0.5) * 15,
+                        vy: (Math.random() - 1.1) * 15 - 3,
+                        size: Math.random() * 8 + 5,
+                        color: colors[Math.floor(Math.random() * colors.length)],
+                        rotation: Math.random() * 360,
+                        rotSpeed: (Math.random() - 0.5) * 12,
+                        gravity: 0.35,
+                        opacity: 1
+                    });
+                }
+
+                if (confettiAnimId) cancelAnimationFrame(confettiAnimId);
+                updateConfetti();
+            }
+
+            function updateConfetti() {
+                confettiCtx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+
+                confettiParticles.forEach(p => {
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.vy += p.gravity;
+                    p.vx *= 0.98;
+                    p.rotation += p.rotSpeed;
+                    p.opacity -= 0.009;
+
+                    if (p.opacity > 0) {
+                        confettiCtx.save();
+                        confettiCtx.globalAlpha = p.opacity;
+                        confettiCtx.translate(p.x, p.y);
+                        confettiCtx.rotate((p.rotation * Math.PI) / 180);
+                        confettiCtx.fillStyle = p.color;
+                        confettiCtx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6);
+                        confettiCtx.restore();
+                    }
+                });
+
+                confettiParticles = confettiParticles.filter(p => p.opacity > 0 && p.y < confettiCanvas.height + 20);
+
+                if (confettiParticles.length > 0) {
+                    confettiAnimId = requestAnimationFrame(updateConfetti);
+                } else {
+                    confettiCtx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+                }
+            }
+
+            // 8. 이벤트 연결 및 즉시 초기화
+            centerSpinBtn.addEventListener('click', spinWheel);
+            mainSpinBtn.addEventListener('click', spinWheel);
+
+            spinAgainBtn.addEventListener('click', () => {
+                hideModal();
+                spinWheel();
+            });
+
+            closeModalBtn.addEventListener('click', hideModal);
+
+            resultModal.addEventListener('click', (e) => {
+                if (e.target === resultModal) hideModal();
+            });
+
+            muteBtn.addEventListener('click', () => {
+                isMuted = !isMuted;
+                if (isMuted) {
+                    muteIcon.textContent = '🔇';
+                    muteText.textContent = '음소거됨';
+                } else {
+                    muteIcon.textContent = '🔊';
+                    muteText.textContent = '효과음 켜짐';
+                    initAudio();
+                    playTickSound();
+                }
+            });
+
+            clearHistoryBtn.addEventListener('click', () => {
+                historyRecords = [];
+                renderHistory();
+            });
+
+            window.addEventListener('keydown', (e) => {
+                if (e.code === 'Space' || e.code === 'Enter') {
+                    if (resultModal.classList.contains('show')) {
+                        e.preventDefault();
+                        hideModal();
+                        spinWheel();
+                    } else if (!isSpinning && document.activeElement.tagName !== 'BUTTON') {
+                        e.preventDefault();
+                        spinWheel();
+                    }
+                } else if (e.code === 'Escape' && resultModal.classList.contains('show')) {
+                    hideModal();
+                }
+            });
+
+            window.addEventListener('resize', resizeCanvases);
+            resizeCanvases();
+        })();
+    </script>
+</body>
+</html>
